@@ -11,7 +11,6 @@ from typing import Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 app = FastAPI(title="Docker Panel")
@@ -24,7 +23,68 @@ app.add_middleware(
 )
 
 DOCKER_SOCKET = "/var/run/docker.sock"
-DOCKER_BIN = "/volume1/@appstore/ContainerManager/usr/bin/docker"
+
+def _detect_docker_bin() -> str:
+    """Auto-detect docker binary path across different NAS systems."""
+    candidates = [
+        "docker",  # PATH-based (fnOS, standard Linux)
+        "/usr/bin/docker",  # Debian/Ubuntu (fnOS)
+        "/usr/local/bin/docker",  # Manual install
+        "/volume1/@appstore/ContainerManager/usr/bin/docker",  # Synology
+    ]
+    for c in candidates:
+        try:
+            result = subprocess.run(
+                [c, "version", "--format", "{{.Server.Version}}"],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.returncode == 0:
+                return c
+        except Exception:
+            continue
+    return "docker"  # fallback
+
+DOCKER_BIN = _detect_docker_bin()
+
+
+def _detect_disk_targets() -> list:
+    """Auto-detect disk mount points for different NAS systems."""
+    targets = []
+    try:
+        result = subprocess.run(
+            ["df", "-h", "--output=target,pcent"],
+            capture_output=True, text=True, timeout=5
+        )
+        lines = result.stdout.strip().split("\n")[1:]  # skip header
+        for line in lines:
+            parts = line.split()
+            if len(parts) >= 2:
+                mount = parts[0]
+                pct_str = parts[-1].replace("%", "")
+                try:
+                    pct = int(pct_str)
+                except ValueError:
+                    continue
+                # Skip tmpfs, overlay, etc.
+                if mount in ("/", "/boot", "/boot/efi") or \
+                   mount.startswith("/volume") or \
+                   mount.startswith("/mnt/") or \
+                   mount.startswith("/srv/") or \
+                   mount.startswith("/data") or \
+                   mount.startswith("/home"):
+                    targets.append(mount)
+    except Exception:
+        pass
+    # Deduplicate and ensure / is first
+    seen = set()
+    unique = []
+    for t in targets:
+        if t not in seen:
+            seen.add(t)
+            unique.append(t)
+    # Sort: / first, then alphabetical
+    unique.sort(key=lambda x: (0 if x == "/" else 1, x))
+    return unique if unique else ["/"]
 
 
 def docker_api(method: str, path: str, data: Optional[bytes] = None) -> dict:
@@ -242,7 +302,7 @@ def _decode_chunked(data: bytes) -> bytes:
 
 def docker_cmd(*args) -> dict:
     """Execute docker CLI command as fallback."""
-    cmd = ["docker"] + list(args)
+    cmd = [DOCKER_BIN] + list(args)
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
         if result.returncode != 0:
@@ -255,10 +315,11 @@ def docker_cmd(*args) -> dict:
 
 
 def get_disk_usage() -> dict:
-    """Get disk usage."""
+    """Get disk usage for auto-detected mount points."""
     try:
+        targets = _detect_disk_targets()
         result = subprocess.run(
-            ["df", "-h", "/volume1", "/"],
+            ["df", "-h"] + targets,
             capture_output=True, text=True, timeout=5
         )
         lines = result.stdout.strip().split("\n")
@@ -500,7 +561,7 @@ FRONTEND_HTML = r"""
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>群晖 Docker 管理面板</title>
+<title>Docker 管理面板</title>
 <style>
 /* ========== THEME SYSTEM ========== */
 :root {
@@ -1043,11 +1104,8 @@ body {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
-.container-card { animation: fadeIn 0.3s ease forwards; }
-
 /* Responsive */
 @media (max-width: 768px) {
-  .container-grid { grid-template-columns: 1fr; }
   .header { padding: 12px 16px; }
   .header h1 { font-size: 16px; }
   .system-bar { grid-template-columns: 1fr 1fr; }
