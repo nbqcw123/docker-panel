@@ -393,10 +393,41 @@ async def container_stats(container_id: str):
 
 @app.get("/api/system")
 async def system_info():
-    """Get system memory and disk info."""
+    """Get system memory, disk, and port info."""
+    loop = asyncio.get_event_loop()
+    # Get all containers for port summary
+    raw = await loop.run_in_executor(None, lambda: docker_api("GET", "/containers/json?all=true"))
+    ports = []
+    if isinstance(raw, list):
+        for c in raw:
+            if c.get("State") != "running":
+                continue
+            name = c.get("Names", [""])[0].lstrip("/")
+            for p in c.get("Ports", []):
+                host_port = p.get("PublicPort")
+                if host_port:
+                    ports.append({
+                        "host_port": host_port,
+                        "container_port": p.get("PrivatePort"),
+                        "protocol": p.get("Type", "tcp"),
+                        "host_ip": p.get("IP", "0.0.0.0"),
+                        "container_name": name,
+                    })
+    # Sort by host port
+    ports.sort(key=lambda x: x["host_port"])
+    # Deduplicate by host port (keep first)
+    seen = set()
+    unique_ports = []
+    for p in ports:
+        key = (p["host_port"], p["protocol"])
+        if key not in seen:
+            seen.add(key)
+            unique_ports.append(p)
     return {
         "memory": get_system_memory(),
         "disk": get_disk_usage(),
+        "ports": unique_ports,
+        "ports_count": len(unique_ports),
     }
 
 
@@ -664,7 +695,91 @@ body {
 .theme-btn:hover { background: var(--card-hover); }
 .theme-btn.active { border-color: var(--accent); background: var(--card-hover); }
 
-/* ========== SYSTEM BAR ========== */
+/* ========== PORTS BAR ========== */
+.ports-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+  padding: 16px 20px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 2px 8px var(--shadow);
+}
+.ports-bar-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.ports-bar-title {
+  font-size: 14px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ports-bar-title .icon {
+  font-size: 18px;
+}
+.ports-bar-count {
+  font-size: 12px;
+  color: var(--text-dim);
+  background: var(--bg2);
+  padding: 2px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+.port-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--bg2);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+  color: var(--text-bright);
+  transition: all var(--transition);
+}
+.port-item:hover {
+  border-color: var(--accent);
+  background: var(--card-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px var(--shadow);
+}
+.port-item .port-num {
+  color: var(--accent);
+  font-size: 15px;
+  font-weight: 700;
+}
+.port-item .port-arrow {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.port-item .port-container {
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 400;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.port-item .port-proto {
+  color: var(--yellow);
+  font-size: 10px;
+  font-weight: 500;
+}
+.ports-empty {
+  color: var(--text-dim);
+  font-size: 13px;
+  padding: 8px 0;
+}
 .system-bar {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -1034,6 +1149,17 @@ body {
 
 <div id="errorBanner"></div>
 
+<div class="ports-bar" id="portsBar">
+  <div class="ports-bar-header">
+    <div class="ports-bar-title">
+      <span class="icon">🔌</span>
+      已占用端口
+    </div>
+    <span class="ports-bar-count" id="portsCount">0 个端口</span>
+  </div>
+  <div id="portsList"></div>
+</div>
+
 <div class="system-bar" id="systemBar"></div>
 
 <div class="category-bar" id="categoryBar">
@@ -1085,17 +1211,25 @@ async function loadData() {
   document.getElementById('errorBanner').innerHTML = '';
 
   try {
-    const resp = await fetch(API + '/api/containers/all-stats');
-    if (!resp.ok) {
-      const err = await resp.json();
+    // Fetch containers+stats and system info (ports) in parallel
+    const [respAll, respSys] = await Promise.all([
+      fetch(API + '/api/containers/all-stats'),
+      fetch(API + '/api/system'),
+    ]);
+    if (!respAll.ok) {
+      const err = await respAll.json();
       throw new Error(err.detail || 'API error');
     }
-    const data = await resp.json();
+    const data = await respAll.json();
+    const sysData = await respSys.json();
 
     if (data.containers) {
       allContainers = data.containers;
     }
-    renderSystemBar(data.system || {});
+    // Merge system data with ports
+    const system = { ...(data.system || {}), ...(sysData || {}) };
+    renderPorts(system);
+    renderSystemBar(system);
     renderCategories();
     renderContainers();
   } catch (e) {
@@ -1105,6 +1239,27 @@ async function loadData() {
     btn.classList.remove('loading');
     icon.classList.remove('spin');
   }
+}
+
+function renderPorts(sys) {
+  const ports = sys.ports || [];
+  const count = sys.ports_count || 0;
+  document.getElementById('portsCount').textContent = count + ' 个端口';
+  const list = document.getElementById('portsList');
+  if (ports.length === 0) {
+    list.innerHTML = '<div class="ports-empty">暂无运行中的容器暴露端口</div>';
+    return;
+  }
+  list.innerHTML = ports.map(p => {
+    const name = p.container_name || '';
+    return `<div class="port-item" title="${name}">
+      <span class="port-num">${p.host_port}</span>
+      <span class="port-arrow">→</span>
+      <span>${p.container_port}</span>
+      <span class="port-proto">${p.protocol}</span>
+      ${name ? `<span class="port-container">(${name})</span>` : ''}
+    </div>`;
+  }).join('');
 }
 
 function renderSystemBar(sys) {
