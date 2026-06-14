@@ -65,12 +65,14 @@ def _detect_disk_targets() -> list:
                     pct = int(pct_str)
                 except ValueError:
                     continue
-                if mount in ("/", "/boot", "/boot/efi") or \
-                   mount.startswith("/volume") or \
-                   mount.startswith("/mnt/") or \
-                   mount.startswith("/srv/") or \
-                   mount.startswith("/data") or \
-                   mount.startswith("/home"):
+                # Only top-level mount points
+                if mount in ("/", "/boot", "/boot/efi"):
+                    targets.append(mount)
+                elif re.match(r"^/volume\d+$", mount):  # /volume1, /volume2, etc.
+                    targets.append(mount)
+                elif mount in ("/mnt", "/srv", "/data", "/home"):
+                    targets.append(mount)
+                elif re.match(r"^(/mnt|/srv|/data|/home)/[^/]+$", mount):  # /mnt/xxx, /data/xxx
                     targets.append(mount)
     except Exception:
         pass
