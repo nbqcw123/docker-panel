@@ -255,11 +255,6 @@ FRONTEND_HTML = r"""
 body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans SC',sans-serif;min-height:100vh;transition:background var(--transition),color var(--transition);}
 
 /* ===== HEADER ===== */
-.header {
-  display:flex;align-items:center;gap:16px;
-  padding:14px 24px;margin-bottom:16px;
-  background:var(--card);border-radius:var(--radius);border:1px solid var(--border);
-  box-shadow:0 2px 8px var(--shadow);position:sticky;top:0;z-index:100;backdrop-filter:blur(12px);
 .header {display:flex;align-items:center;gap:12px;padding:12px 20px;margin-bottom:14px;background:var(--card);border-radius:var(--radius);border:1px solid var(--border);box-shadow:0 2px 8px var(--shadow);position:sticky;top:0;z-index:100;backdrop-filter:blur(12px);}
 .header-left {display:flex;align-items:center;gap:8px;flex-shrink:0;}
 .header h1 {font-size:17px;font-weight:700;display:flex;align-items:center;gap:6px;white-space:nowrap;margin:0;}
