@@ -1,28 +1,26 @@
-# 🐳 Docker 管理面板 v1.3.0
+# 🐳 Docker 管理面板 v1.3.2
 
 轻量级 Docker 容器管理 Web 面板，支持 **群晖 Synology**、**飞牛 fnOS** 等 NAS 系统。
 
 ## 页面预览
 
-Based on actual HTML layout v1.3.0:
-
 ```
 ┌────────────────────────────────────────────────────────────────────────────┐
-│ 🐳 Docker Panel v1.3.0  │ [🧠 71%] [💾 36%] [🐳 2/40] │ [🌙☀️🌊🔮] [⟳] │
-│ header-left             │ hdr-stats (right-aligned)      │ theme + refresh│
+│ 🐳 Docker Panel v1.3.2  │ [⚡ 21%] [🧠 71%] [🌐 1.3GB↓] [💾 36%] [🐳 2/40] │ [🌙☀️🌊🔮] [⟳] │
+│ header-left             │ hdr-stats (居中)                   │ theme + refresh│
 ├─────────────────────────┴──────────────────────────────────────────────────┤
 │ 📦 全部(40) │ 🟢 使用中(2) │ 🔴 未使用(38)          ← category tabs      │
 ├─────────────┬──────────────────────────────────────────────────────────────┤
 │ 🔌 已占用端口 │ 🔍 搜索容器名称 / 镜像...                                    │
-│ (8)         │                                                              │
-│ 50088 → dp  │ ● 使用中 (1)                                                 │
-│ 50086 → iptv│ ┌────────────────────────────────────────────────────────────┐│
-│ 58000 → her │ │ 🟢 自定义名称 (原名)                    v1.2.0  📝 用途描述  ││
-│ 443 → nginx │ │ nousresearch/hermes-agent:latest                           ││
-│ 80 → nginx  │ │ Up 6 days | CPU: 12% | MEM: 1.2GB/4GB | [58000] [8000]    ││
-│ 3306 → maria│ │ [▶️] [⏹] [⟳]                                                ││
-│ 6443 → k3s  │ └────────────────────────────────────────────────────────────┘│
-│ 8123 → hass │ ● 未使用 (1)                                                 │
+│ (32)        │                                                              │
+│ 444 → nginx │ ● 使用中 (2)                                                 │
+│ 80 → nginx  │ ┌────────────────────────────────────────────────────────────┐│
+│ 3306 → maria│ │ 🟢 自定义名称 (原名)                    v1.2.0  📝 用途描述  ││
+│ ...         │ │ nousresearch/hermes-agent:latest                           ││
+│             │ │ Up 6 days | CPU: 12% | MEM: 1.2GB/4GB | [58000] [8000]    ││
+│             │ │ [▶️] [⏹] [⟳]                                                ││
+│             │ └────────────────────────────────────────────────────────────┘│
+│             │ ● 未使用 (38)                                                 │
 │             │ ┌────────────────────────────────────────────────────────────┐│
 │             │ │ 🔴 chromium                                               ││
 │             │ │ trim-chromium:latest                                       ││
@@ -31,13 +29,9 @@ Based on actual HTML layout v1.3.0:
 └─────────────┴──────────────────────────────────────────────────────────────┘
 ```
 
-> 分隔符: `│ ←` `│`  
-> 数据行: 状态点 + 自定义名称(原名) + 版本标签 + 用途描述 + 镜像 + 端口标签(蓝色) + 统计 + 操作按钮(绿/红/黄)
+> 顶部通栏 pill：⚡ CPU / 🧠 内存 / 🌐 网络 / 💾 磁盘 / 🐳 容器，居中排列
+> 点击任意 pill → 弹出详情面板（CPU 核心占用/内存容器排行/网络心电图/磁盘容器图表）
 > 点击容器行 → 详情面板（可编辑自定义名称和容器用途）
-
-访问地址：
-- **群晖**: `http://100.113.206.33:50088`
-- **飞牛**: `http://fnnas:50088`
 
 ## 功能
 
@@ -46,7 +40,13 @@ Based on actual HTML layout v1.3.0:
 - ✏️ **自定义名称**：可为容器设置自定义名称，原名保留显示在括号中
 - 📝 **容器用途**：可在详情面板编辑容器用途描述，显示在列表中
 - 🔌 **端口占用**：左侧边栏独立展示所有已占用端口
-- 🖥️ **系统监控**：顶部通栏实时显示系统内存、磁盘使用率、容器状态
+- 🖥️ **系统监控**：顶部通栏实时显示 CPU、内存、网络、磁盘、容器状态
+- 📊 **详情弹窗**：点击顶部 pill 弹出 CPU/内存/网络/磁盘详情面板
+  - ⚡ **CPU**：型号、核心数、频率、负载均值、各核心占用率
+  - 🧠 **内存**：内存条详情 + 容器内存占用排行表
+  - 🌐 **网络**：心电图波形图（RX/TX）+ 容器网络流量排行表
+  - 💾 **磁盘**：各磁盘占用详情 + 容器磁盘占用横向柱状图
+- 🔄 **版本检查**：自动从 GitHub 检测新版本，支持一键更新
 - 🎨 **4 套主题**：暗色 / 亮色 / 海洋蓝 / 紫色之夜
 - 📱 **响应式布局**：适配桌面和移动端
 - ⚡ **实时刷新**：每 30 秒自动更新
@@ -60,13 +60,15 @@ Based on actual HTML layout v1.3.0:
 ┌─────────────────────────────────────────────┐
 │  🐳 Docker 管理面板          [主题] [刷新]   │  ← Header
 ├──────────┬──────────────────────────────────┤
-│ 🧠 内存   │ 使用中 (N 个容器)                  │  ← Top Status
-│ 💾 磁盘   ├──────────────────────────────────┤  (内存/磁盘
-│ 🐳 容器   │ 容器名 版本 镜像 端口 CPU 操作      │   容器状态)
-├──────────┤ 容器名 版本 镜像 端口 CPU 操作      │
-│ 🔌 已占用 │ ...                               │
-│ 端口      │ 未使用 (N 个容器)                  │
-│ 444→443  │ 容器名 版本 镜像 端口 CPU 操作      │
+│ ⚡ CPU    │ 使用中 (N 个容器)                  │  ← Top Status
+│ 🧠 内存   ├──────────────────────────────────┤  (CPU/内存/网络
+│ 🌐 网络   │ 容器名 版本 镜像 端口 CPU 操作      │   /磁盘/容器)
+│ 💾 磁盘   │ 容器名 版本 镜像 端口 CPU 操作      │
+│ 🐳 容器   │ ...                               │
+├──────────┤ 未使用 (N 个容器)                  │
+│ 🔌 已占用 │ 容器名 版本 镜像 端口 CPU 操作      │
+│ 端口      │                                   │
+│ 444→443  │                                   │
 │ 1880→1880│                                   │
 │ ...       │                                   │
 └──────────┴──────────────────────────────────┘
@@ -91,7 +93,7 @@ Based on actual HTML layout v1.3.0:
 |------|-------------|----------|-----------|
 | Docker 路径 | `/volume1/@appstore/...` | `/usr/bin/docker` | `docker` |
 | 磁盘检测 | `/volume1`, `/` | `/`, `/mnt/*`, `/data*` | `/` |
-| 运行方式 | 直接 Python | Docker 容器 / 直接 Python | Docker 容器 |
+| 运行方式 | Docker 容器 / 直接 Python | Docker 容器 / 直接 Python | Docker 容器 |
 
 Docker 二进制路径和磁盘挂载点均为**自动检测**，无需手动配置。
 
@@ -99,25 +101,24 @@ Docker 二进制路径和磁盘挂载点均为**自动检测**，无需手动配
 
 ### Docker 容器（推荐）
 
+> ⚠️ 群晖 NAS 必须使用 `--network host` 模式，bridge 模式端口不响应。
+
 ```bash
 # 构建镜像
 docker build -t docker-panel .
 
-# 运行
+# 运行（群晖用 host 模式）
 docker run -d \
   --name docker-panel \
-  -p 50088:50088 \
+  --network host \
   -v /var/run/docker.sock:/var/run/docker.sock:ro \
   --restart unless-stopped \
   docker-panel
-```
 
-自定义端口：
-```bash
+# 标准 Linux（bridge 模式）
 docker run -d \
   --name docker-panel \
-  -p 8080:50088 \
-  -e DOCKER_PANEL_PORT=50088 \
+  -p 50088:50088 \
   -v /var/run/docker.sock:/var/run/docker.sock:ro \
   --restart unless-stopped \
   docker-panel
@@ -128,8 +129,6 @@ docker run -d \
 ```bash
 pip3 install fastapi uvicorn pydantic
 python3 -m uvicorn main:app --host 0.0.0.0 --port 50088
-# 或
-DOCKER_PANEL_PORT=8080 python3 run.py
 ```
 
 ### 群晖 Docker socket 权限
@@ -146,10 +145,16 @@ sudo chmod 660 /var/run/docker.sock
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | `/` | Web 面板页面 |
+| GET | `/api/version` | 版本信息（本地/远程/更新检测） |
+| POST | `/api/update` | 从 GitHub 下载最新版本 |
+| POST | `/api/restart` | 重启面板服务 |
 | GET | `/api/containers` | 获取所有容器列表（含版本、自定义名称、用途） |
 | GET | `/api/containers/all-stats` | 容器列表 + 实时统计 |
-| GET | `/api/container/{id}/stats` | 单个容器统计 |
+| GET | `/api/container/{id}/stats` | 单个容器统计（CPU/内存/网络） |
+| GET | `/api/container/{id}/disk` | 单个容器磁盘占用 |
 | GET | `/api/system` | 系统信息（内存、磁盘、端口） |
+| GET | `/api/system/cpu-info` | CPU 详细信息（型号/核心/负载/各核占用） |
+| GET | `/api/system/network-info` | 网络信息（网卡/IP/收发流量） |
 | POST | `/api/container/{id}/action` | 容器操作（start/stop/restart） |
 | POST | `/api/container/{id}/custom-name` | 设置自定义名称 `{name: "..."}` |
 | POST | `/api/container/{id}/description` | 设置容器用途 `{description: "..."}` |
@@ -159,19 +164,33 @@ sudo chmod 660 /var/run/docker.sock
 | 文件 | 说明 |
 |------|------|
 | `main.py` | 后端 FastAPI + 前端 HTML（单文件） |
+| `version.json` | 版本信息（用于远程更新检测） |
 | `container_meta.json` | 自定义名称和用途数据（自动生成） |
-| `run.py` | 启动入口 |
 | `Dockerfile` | Docker 镜像构建 |
 | `README.md` | 本文档 |
 
 ## Changelog
 
+### v1.3.2 (2026-06-21)
+- ✨ 顶部通栏新增 ⚡ CPU 和 🌐 网络 pill，居中排列
+- ✨ 点击 CPU → 弹窗显示 CPU 型号/核心/负载/各核占用
+- ✨ 点击内存 → 弹窗显示内存条详情 + 容器内存占用排行
+- ✨ 点击网络 → 弹窗显示心电图波形图（RX/TX）+ 容器网络流量排行
+- ✨ 点击磁盘 → 弹窗显示磁盘详情 + 容器磁盘占用横向柱状图
+- ✨ 新增 API：`/api/system/cpu-info`、`/api/system/network-info`、`/api/container/{id}/disk`
+- 🐛 修复端口列表不显示的 bug（`up.append(k)` → `up.append(p)`）
+
+### v1.3.1 (2026-06-20)
+- 🔧 精简代码：合并重复函数、压缩 CSS 变量格式
+- 🐛 修复版本号硬编码问题（前端动态从 API 获取）
+- 🐛 修复 version.json 未打包进 Docker 镜像的问题
+
 ### v1.3.0 (2026-06-19)
 - ✨ 新增容器版本号显示（从 Docker Labels 或镜像 Tag 提取）
 - ✨ 新增自定义容器名称功能（原名保留显示）
 - ✨ 新增容器用途描述编辑功能
+- ✨ 新增版本检查和一键更新（从 GitHub）
 - 📝 详情面板增加版本号、原名显示
-- 📝 新增 API: `/api/container/{id}/custom-name`, `/api/container/{id}/description`
 
 ### v1.2.0
 - 🎨 4 套主题（暗色/亮色/海洋蓝/紫色）
