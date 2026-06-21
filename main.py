@@ -7,7 +7,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-VERSION = "1.3.0"
+VERSION = "1.3.1"
 GITHUB_REPO = "nbqcw123/docker-panel"
 GITHUB_RAW_BASE = f"https://raw.githubusercontent.com/{GITHUB_REPO}/master"
 
@@ -362,32 +362,26 @@ class CustomNameRequest(BaseModel):
 class DescriptionRequest(BaseModel):
     description: str
 
-@app.post("/api/container/{cid}/custom-name")
-async def set_custom_name(cid: str, req: CustomNameRequest):
+async def _find_and_update(cid: str, field: str, value: str):
+    """Find container by short ID and update custom name or description"""
     meta = _load_custom_meta()
-    # Find full ID from short ID
     loop = asyncio.get_event_loop()
     raw = await loop.run_in_executor(None, lambda: docker_api("GET", "/containers/json?all=true"))
     if isinstance(raw, list):
         for c in raw:
             if c.get("Id", "").startswith(cid):
-                meta["names"][c["Id"]] = req.name
+                meta[field][c["Id"]] = value
                 _save_custom_meta(meta)
-                return {"success": True, "cid": cid, "name": req.name}
+                return {"success": True, "cid": cid, field: value}
     raise HTTPException(404, "Container not found")
+
+@app.post("/api/container/{cid}/custom-name")
+async def set_custom_name(cid: str, req: CustomNameRequest):
+    return await _find_and_update(cid, "names", req.name)
 
 @app.post("/api/container/{cid}/description")
 async def set_description(cid: str, req: DescriptionRequest):
-    meta = _load_custom_meta()
-    loop = asyncio.get_event_loop()
-    raw = await loop.run_in_executor(None, lambda: docker_api("GET", "/containers/json?all=true"))
-    if isinstance(raw, list):
-        for c in raw:
-            if c.get("Id", "").startswith(cid):
-                meta["descriptions"][c["Id"]] = req.description
-                _save_custom_meta(meta)
-                return {"success": True, "cid": cid, "description": req.description}
-    raise HTTPException(404, "Container not found")
+    return await _find_and_update(cid, "descriptions", req.description)
 
 @app.post("/api/container/{cid}/action")
 async def container_action(cid: str, req: ActionRequest):
@@ -427,18 +421,11 @@ FRONTEND_HTML = r"""
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Docker 管理面板</title>
 <style>
-:root {
-  --bg:#0f1117;--bg2:#161b22;--card:#1c2333;--card-hover:#242d3d;
-  --border:#30363d;--text:#e6edf3;--text-dim:#8b949e;--text-bright:#f0f6fc;
-  --accent:#58a6ff;--accent-dim:#1f6feb;
-  --green:#3fb950;--green-dim:#238636;--red:#f85149;--red-dim:#da3633;
-  --yellow:#d29922;--yellow-dim:#9e6a03;
-  --shadow:rgba(0,0,0,0.4);--radius:10px;--radius-sm:8px;--radius-xs:6px;
-  --transition:0.2s ease;
-}
-[data-theme="light"] {--bg:#f6f8fa;--bg2:#fff;--card:#fff;--card-hover:#f3f4f6;--border:#d0d7de;--text:#1f2328;--text-dim:#656d76;--text-bright:#1f2328;--accent:#0969da;--accent-dim:#0550ae;--green:#1a7f37;--green-dim:#116329;--red:#cf222e;--red-dim:#a40e26;--yellow:#9a6700;--yellow-dim:#7d4e00;--shadow:rgba(0,0,0,0.08);}
-[data-theme="ocean"] {--bg:#0a1628;--bg2:#0d1f3c;--card:#112645;--card-hover:#163056;--border:#1c3a5f;--text:#c3d4e6;--text-dim:#6b8cae;--text-bright:#e8f0fe;--accent:#38bdf8;--accent-dim:#0284c7;--green:#34d399;--green-dim:#059669;--red:#fb7185;--red-dim:#e11d48;--yellow:#fbbf24;--yellow-dim:#d97706;--shadow:rgba(0,0,0,0.5);}
-[data-theme="purple"] {--bg:#13081f;--bg2:#1a0e2e;--card:#221440;--card-hover:#2a1a4d;--border:#3d2666;--text:#d8c8f0;--text-dim:#8b7aab;--text-bright:#f0e8ff;--accent:#c084fc;--accent-dim:#9333ea;--green:#4ade80;--green-dim:#16a34a;--red:#f87171;--red-dim:#dc2626;--yellow:#facc15;--yellow-dim:#ca8a04;--shadow:rgba(0,0,0,0.5);}
+/* ===== THEME VARIABLES ===== */
+:root{--bg:#0f1117;--bg2:#161b22;--card:#1c2333;--card-hover:#242d3d;--border:#30363d;--text:#e6edf3;--text-dim:#8b949e;--text-bright:#f0f6fc;--accent:#58a6ff;--accent-dim:#1f6feb;--green:#3fb950;--green-dim:#238636;--red:#f85149;--red-dim:#da3633;--yellow:#d29922;--yellow-dim:#9e6a03;--shadow:rgba(0,0,0,0.4);--radius:10px;--radius-sm:8px;--radius-xs:6px;--transition:0.2s ease;}
+[data-theme="light"]{--bg:#f6f8fa;--bg2:#fff;--card:#fff;--card-hover:#f3f4f6;--border:#d0d7de;--text:#1f2328;--text-dim:#656d76;--text-bright:#1f2328;--accent:#0969da;--accent-dim:#0550ae;--green:#1a7f37;--green-dim:#116329;--red:#cf222e;--red-dim:#a40e26;--yellow:#9a6700;--yellow-dim:#7d4e00;--shadow:rgba(0,0,0,0.08);}
+[data-theme="ocean"]{--bg:#0a1628;--bg2:#0d1f3c;--card:#112645;--card-hover:#163056;--border:#1c3a5f;--text:#c3d4e6;--text-dim:#6b8cae;--text-bright:#e8f0fe;--accent:#38bdf8;--accent-dim:#0284c7;--green:#34d399;--green-dim:#059669;--red:#fb7185;--red-dim:#e11d48;--yellow:#fbbf24;--yellow-dim:#d97706;--shadow:rgba(0,0,0,0.5);}
+[data-theme="purple"]{--bg:#13081f;--bg2:#1a0e2e;--card:#221440;--card-hover:#2a1a4d;--border:#3d2666;--text:#d8c8f0;--text-dim:#8b7aab;--text-bright:#f0e8ff;--accent:#c084fc;--accent-dim:#9333ea;--green:#4ade80;--green-dim:#16a34a;--red:#f87171;--red-dim:#dc2626;--yellow:#facc15;--yellow-dim:#ca8a04;--shadow:rgba(0,0,0,0.5);}
 
 *{margin:0;padding:0;box-sizing:border-box;}
 body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans SC',sans-serif;min-height:100vh;transition:background var(--transition),color var(--transition);}
