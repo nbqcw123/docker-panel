@@ -66,7 +66,9 @@ def _version_tuple(v):
 @app.get("/api/version")
 async def get_version():
     """Get local and remote version info"""
-    remote = _get_remote_version()
+    import asyncio
+    loop = asyncio.get_event_loop()
+    remote = await asyncio.wait_for(loop.run_in_executor(None, _get_remote_version), timeout=5)
     local_version = VERSION
     remote_version = remote.get("version", "") if remote else ""
     has_update = False
@@ -88,7 +90,10 @@ class UpdateRequest(BaseModel):
 @app.get("/api/check-update")
 async def check_update():
     """Check if a newer version is available on GitHub"""
-    remote = _get_remote_version()
+    import asyncio
+    loop = asyncio.get_event_loop()
+    # Run blocking call in thread to avoid freezing uvicorn
+    remote = await asyncio.wait_for(loop.run_in_executor(None, _get_remote_version), timeout=5)
     local_version = VERSION
     remote_version = remote.get("version", "") if remote else ""
     has_update = False
