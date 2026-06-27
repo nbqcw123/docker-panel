@@ -186,7 +186,8 @@ DOCKER_BIN = _detect_docker_bin()
 def _detect_disk_targets() -> list:
     targets = []
     try:
-        result = subprocess.run(["df", "-l", "--output=target,pcent,size,fstype"], capture_output=True, text=True, timeout=5)
+        # Use df without -l to see all filesystems (including /volume1 on Synology)
+        result = subprocess.run(["df", "--output=target,pcent,size,fstype"], capture_output=True, text=True, timeout=5)
         for line in result.stdout.strip().split("\n")[1:]:
             parts = line.split()
             if len(parts) >= 4:
@@ -202,10 +203,8 @@ def _detect_disk_targets() -> list:
                         continue
                 except:
                     pass
-                # Skip btrfs root (Synology storage pool) and other pseudo filesystems
+                # Skip btrfs/zfs root on Synology (shows whole pool size, not real partition)
                 if fs_type in ("btrfs", "zfs") and mount == "/":
-                    # Still include if it's a real partition (not the whole pool)
-                    # btrfs root on Synology shows the whole pool size, skip it
                     continue
                 if mount in ("/", "/boot", "/boot/efi"): targets.append(mount)
                 elif re.match(r"^/volume\d+$", mount): targets.append(mount)
@@ -309,7 +308,7 @@ _shared_folder_cache = {"time": 0, "data": {}}
 _SHARED_FOLDER_CACHE_TTL = 300  # 5 minutes
 
 def _get_shared_folder_sizes():
-    """Get shared folder sizes via du, with caching. Supports /volume1 (Synology), /vol (fnOS), and direct df detection."""
+    """Get shared folder sizes, with caching. Auto-detects NAS type and access method."""
     import time
     now = time.time()
     if now - _shared_folder_cache["time"] < _SHARED_FOLDER_CACHE_TTL:
@@ -318,7 +317,7 @@ def _get_shared_folder_sizes():
     shared_folders = {}
     try:
         import os
-        # Detect NAS shared folder roots (check both container root and HOST_ROOT mount)
+        # Method 1: Direct filesystem access (container mounted /volume1 or /vol)
         search_roots = []
         for prefix in [HOST_ROOT, ""] if HOST_ROOT else [""]:
             for vol in ["/volume1", "/vol", "/vol1", "/mnt/user"]:
@@ -329,41 +328,52 @@ def _get_shared_folder_sizes():
             if search_roots:
                 break
         
-        # If no standard root found, try to detect from df output (Synology btrfs subvolumes)
-        if not search_roots:
+        if search_roots:
+            for root in search_roots:
+                try:
+                    for name in os.listdir(root):
+                        path = os.path.join(root, name)
+                        if os.path.isdir(path) and not name.startswith("@") and not name.startswith("."):
+                            try:
+                                r_du = subprocess.run(["du","-sm",path], capture_output=True, text=True, timeout=30)
+                                size_mb = int(r_du.stdout.split()[0])
+                                if size_mb > 100:
+                                    shared_folders[name] = size_mb
+                            except:
+                                pass
+                except:
+                    pass
+        
+        # Method 2: df subvolume detection (when /volume1 not mounted in container)
+        if not shared_folders:
             try:
-                r = subprocess.run(["df", "--output=target,fstype"], capture_output=True, text=True, timeout=5)
+                r = subprocess.run(["df","--output=target,size"], capture_output=True, text=True, timeout=5)
                 for line in r.stdout.strip().split("\n")[1:]:
                     parts = line.split()
                     if len(parts) >= 2:
-                        m, fs = parts[0], parts[1]
-                        # Synology: /volume1/xxx btrfs subvolumes
-                        if re.match(r"^/volume\d+/[^/]+$", m) and fs in ("btrfs", "ext4"):
-                            parent = m.rsplit("/", 1)[0]
-                            if parent not in search_roots:
-                                search_roots.append(parent)
-                            break
+                        m, size_str = parts[0], parts[1]
+                        # Synology: /volume1/xxx subvolumes
+                        vol_match = re.match(r"^/volume\d+/(.+)$", m)
+                        if vol_match:
+                            name = vol_match.group(1)
+                            if not name.startswith("@") and not name.startswith("."):
+                                try:
+                                    size_mb = int(size_str) // 1024
+                                    if size_mb > 100:
+                                        shared_folders[name] = size_mb
+                                except:
+                                    pass
                         # fnOS: /vol1/xxx
-                        elif re.match(r"^/vol\d+/[^/]+$", m):
-                            parent = m.rsplit("/", 1)[0]
-                            if parent not in search_roots:
-                                search_roots.append(parent)
-                            break
-            except:
-                pass
-        
-        for root in search_roots:
-            try:
-                for name in os.listdir(root):
-                    path = os.path.join(root, name)
-                    if os.path.isdir(path) and not name.startswith("@") and not name.startswith("."):
-                        try:
-                            r_du = subprocess.run(["du","-sm",path], capture_output=True, text=True, timeout=30)
-                            size_mb = int(r_du.stdout.split()[0])
-                            if size_mb > 100:  # Only show folders > 100MB
-                                shared_folders[name] = size_mb
-                        except:
-                            pass
+                        vol_match2 = re.match(r"^/vol\d+/(.+)$", m)
+                        if vol_match2:
+                            name = vol_match2.group(1)
+                            if not name.startswith("@") and not name.startswith("."):
+                                try:
+                                    size_mb = int(size_str) // 1024
+                                    if size_mb > 100:
+                                        shared_folders[name] = size_mb
+                                except:
+                                    pass
             except:
                 pass
     except:
@@ -387,7 +397,7 @@ def get_disk_usage():
         except:
             pass
         # Get detailed info
-        r = subprocess.run(["df","-l"]+tgts, capture_output=True, text=True, timeout=5)
+        r = subprocess.run(["df"]+tgts, capture_output=True, text=True, timeout=5)
         ds = {}
         for ln in r.stdout.strip().split("\n")[1:]:
             p = ln.split()
