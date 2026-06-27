@@ -68,7 +68,10 @@ async def get_version():
     """Get local and remote version info"""
     import asyncio
     loop = asyncio.get_event_loop()
-    remote = await asyncio.wait_for(loop.run_in_executor(None, _get_remote_version), timeout=5)
+    try:
+        remote = await asyncio.wait_for(loop.run_in_executor(None, _get_remote_version), timeout=5)
+    except:
+        remote = None
     local_version = VERSION
     remote_version = remote.get("version", "") if remote else ""
     has_update = False
@@ -92,8 +95,10 @@ async def check_update():
     """Check if a newer version is available on GitHub"""
     import asyncio
     loop = asyncio.get_event_loop()
-    # Run blocking call in thread to avoid freezing uvicorn
-    remote = await asyncio.wait_for(loop.run_in_executor(None, _get_remote_version), timeout=5)
+    try:
+        remote = await asyncio.wait_for(loop.run_in_executor(None, _get_remote_version), timeout=5)
+    except:
+        remote = None
     local_version = VERSION
     remote_version = remote.get("version", "") if remote else ""
     has_update = False
