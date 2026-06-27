@@ -1130,7 +1130,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       <button class="theme-btn" data-theme="ocean" title="海洋蓝">🌊</button>
       <button class="theme-btn" data-theme="purple" title="紫色">🔮</button>
     </div>
-    <button class="refresh-btn" id="refreshBtn" onclick="loadData()"><span id="refreshIcon">⟳</span> 刷新</button>
+    <button class="refresh-btn" id="refreshBtn" onclick="loadData()"><span id="refreshIcon">⟳</span> 加载</button>
   </div>
 </div>
 
@@ -1155,7 +1155,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
   <div class="ports-sidebar">
     <div class="ports-bar">
       <div class="ports-bar-header">
-        <div class="ports-bar-title">🔌 已占用端口</div>
+        <div class="ports-bar-title">🔌 已使用端口</div>
         <span class="ports-bar-count" id="portsCount">0</span>
       </div>
       <div class="ports-list" id="portsList"></div>
@@ -2204,7 +2204,8 @@ setTimeout(checkVersion, 1000);
 setInterval(checkVersion, 300000);
 
 loadData();
-setInterval(loadData,30000);
+// 首次自动加载后，后续需手动点击加载按钮刷新
+// setInterval 已移除，用户需点击"加载"按钮手动刷新
 </script>
 
 <!-- 更新弹窗 -->
